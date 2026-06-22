@@ -1,0 +1,193 @@
+# ============================================================================
+# Algorithmic Trading System - .gitignore
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# Secrets & Environment (NEVER COMMIT)
+# ----------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+*.env
+secrets.json
+credentials.json
+dhan_credentials.json
+
+# ----------------------------------------------------------------------------
+# Python
+# ----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+pipenv/
+
+# Testing & Coverage
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+htmlcov/
+
+# Type Checkers
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# ----------------------------------------------------------------------------
+# Node / React / Vite
+# ----------------------------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Production builds
+dist/
+dist-ssr/
+build/
+*.local
+
+# Vite
+.vite/
+
+# React
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# TypeScript
+*.tsbuildinfo
+
+# ESLint
+.eslintcache
+
+# ----------------------------------------------------------------------------
+# Databases
+# ----------------------------------------------------------------------------
+*.sqlite3
+*.sqlite
+*.db
+postgres-data/
+timescale-data/
+
+# ----------------------------------------------------------------------------
+# Redis
+# ----------------------------------------------------------------------------
+dump.rdb
+redis-data/
+
+# ----------------------------------------------------------------------------
+# Logs
+# ----------------------------------------------------------------------------
+logs/
+*.log
+pidfiles/
+*.pid
+
+# ----------------------------------------------------------------------------
+# IDE / Editor
+# ----------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+.history/
+
+# ----------------------------------------------------------------------------
+# OS
+# ----------------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ----------------------------------------------------------------------------
+# Celery
+# ----------------------------------------------------------------------------
+celerybeat-schedule
+celerybeat.pid
+
+# ----------------------------------------------------------------------------
+# Backtest artifacts / data caches
+# ----------------------------------------------------------------------------
+*.csv
+*.parquet
+*.feather
+data_cache/
+backtest_results/
+*.backtest
+
+# ----------------------------------------------------------------------------
+# Docker (keep Dockerfile & docker-compose.yml tracked)
+# ----------------------------------------------------------------------------
+# (do NOT ignore Dockerfile or docker-compose.yml)
+
+# ----------------------------------------------------------------------------
+# Misc
+# ----------------------------------------------------------------------------
+.envrc
+.directory
+
+# ----------------------------------------------------------------------------
+# Workspace-only directories (NOT part of the trading-system repo)
+# ----------------------------------------------------------------------------
+skills/
+download/
+upload/
+.agent-ctx/
+worklog.md

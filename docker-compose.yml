@@ -1,0 +1,55 @@
+# ============================================================================
+# docker-compose.yml — Local dev infra (PostgreSQL + Redis + Flower)
+# Run:  docker compose up -d
+# ============================================================================
+version: "3.9"
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg15
+    container_name: trading_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: trader
+      POSTGRES_PASSWORD: traderpass
+      POSTGRES_DB: trading_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trader -d trading_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: trading_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  flower:
+    image: mher/flower:1.2.0
+    container_name: trading_flower
+    restart: unless-stopped
+    ports:
+      - "5555:5555"
+    environment:
+      CELERY_BROKER_URL: redis://redis:6379/1
+      FLOWER_PORT: "5555"
+    depends_on:
+      - redis
+
+volumes:
+  pgdata:
+  redisdata:
