@@ -35,9 +35,11 @@ redis==5.0.1
 flower==2.0.1
 
 # --- Numeric / indicators --------------------------------------------------
+# NOTE: pandas-ta was yanked from PyPI by its maintainer.
+# All indicators (SMA, StdDev, ATR, bar score, etc.) are implemented in pure
+# pandas/numpy in app/services/indicators.py — no third-party TA lib needed.
 pandas==2.2.0
 numpy==1.26.4
-pandas-ta==0.3.14b0
 scipy==1.12.0
 
 # --- Date / time -----------------------------------------------------------
