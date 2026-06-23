@@ -25,6 +25,30 @@ from loguru import logger
 from app.strategies.base import StrategyBase, Signal
 
 
+# ----------------------------------------------------------------------
+#  JSON sanitiser — converts datetimes/numpy scalars to JSON-safe types
+# ----------------------------------------------------------------------
+def _json_safe(obj: Any) -> Any:
+    """Recursively convert datetimes, numpy types, and pandas timestamps
+    into JSON-serialisable primitives. SQLAlchemy's JSON column uses
+    json.dumps() which cannot handle these natively."""
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, (np.bool_,)):
+        return bool(obj)
+    if isinstance(obj, pd.Timestamp):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {str(k): _json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_json_safe(v) for v in obj]
+    return obj
+
+
 @dataclass
 class BacktestConfig:
     initial_capital: float = 1_000_000.0
@@ -253,6 +277,11 @@ class Backtester:
         gtp = avg_annual_return / (max_dd_pct * 100.0) if max_dd_pct > 0 else 0.0
         is_tradeable = gtp > 1.5
 
+        # Sanitise trades + parameters for JSON persistence (DB JSON column)
+        # Converts datetime → ISO string, numpy scalars → Python scalars.
+        trades_safe = _json_safe(trades)
+        params_safe = _json_safe(self.strategy.params)
+
         return BacktestResult(
             initial_capital=self.config.initial_capital,
             final_equity=round(final_equity, 2),
@@ -267,9 +296,9 @@ class Backtester:
             avg_annual_return=round(avg_annual_return, 4),
             gtp_ratio=round(gtp, 4),
             is_tradeable=is_tradeable,
-            trades=trades,
+            trades=trades_safe,
             equity_curve=equity_curve,
-            parameters=self.strategy.params,
+            parameters=params_safe,
             started_at=started_at,
             completed_at=datetime.utcnow(),
         )
