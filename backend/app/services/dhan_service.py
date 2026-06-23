@@ -1,21 +1,39 @@
 """
 app.services.dhan_service
 -------------------------
-Wrapper around the dhanhq SDK.
+Wrapper around the dhanhq 2.2.0 SDK.
+
+dhanhq 2.2.0 API (different from 1.x):
+    from dhanhq import DhanContext, dhanhq
+    ctx = DhanContext(client_id, access_token)
+    dhan = dhanhq(ctx)
+    dhan.historical_daily_data(security_id, exchange_segment, instrument_type,
+                                from_date, to_date, expiry_code=0, oi=False)
+    dhan.intraday_minute_data(security_id, exchange_segment, instrument_type,
+                               from_date, to_date, interval=1, oi=False)
+
+Exchange segments (constants on the dhanhq class):
+    dhan.NSE = 'NSE_EQ'
+    dhan.BSE = 'BSE_EQ'
+    dhan.FNO = 'NSE_FNO'
+    dhan.MCX = 'MCX_COMM'         # NOTE: was 'MCX' in 1.x, now 'MCX_COMM'
+    dhan.CUR = 'NSE_CURRENCY'
+
+Instrument types we use:
+    NSE_EQ       → 'EQUITY'
+    NSE_FNO      → 'INDEX' | 'OPTIDX' | 'OPTSTK' | 'FUTIDX' | 'FUTSTK'
+    MCX_COMM     → 'FUTCOM' | 'OPTCOM'
 
 Responsibilities:
-- Authenticate (client_id + access_token from env)
+- Authenticate via DhanContext
 - Fetch historical OHLCV for NSE_EQ, NSE_FNO, MCX
 - Persist bars into the OhlcvBar table (idempotent upserts)
-- Map symbols to DhanHQ security_ids
-
-The wrapper is sync (dhanhq is sync). Celery workers call it directly;
-FastAPI routes call it through Celery tasks to avoid blocking the event loop.
+- Load bars back from DB as a pandas DataFrame
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta, date
-from typing import Any, Iterable
+from typing import Any
 
 import pandas as pd
 from loguru import logger
@@ -27,26 +45,27 @@ from app.db.session import SessionLocal
 from app.models.ohlcv_bar import OhlcvBar
 
 
-# --- DhanHQ segment codes ---------------------------------------------------
-SEGMENT_MAP = {
-    "NSE_EQ": "NSE_EQ",
-    "NSE_FNO": "NSE_FNO",
-    "MCX": "MCX",
+# --- Segment → (dhanhq constant value, default instrument_type) -------------
+# Keys are OUR segment codes; values map to dhanhq's exchange_segment + instrument_type
+SEGMENT_MAP: dict[str, dict] = {
+    "NSE_EQ":  {"exchange_segment": "NSE_EQ",   "instrument_type": "EQUITY"},
+    "NSE_FNO": {"exchange_segment": "NSE_FNO",  "instrument_type": "INDEX"},   # default for NIFTY/BANKNIFTY
+    "MCX":     {"exchange_segment": "MCX_COMM", "instrument_type": "FUTCOM"},
 }
 
-# DhanHQ interval codes
-INTERVAL_MAP = {
-    "1m": "1_MINUTE",
-    "5m": "5_MINUTE",
-    "15m": "15_MINUTE",
-    "30m": "30_MINUTE",
-    "1h": "1_HOUR",
-    "1D": "1_DAY",
+# Map our interval strings → dhanhq method + (interval int for intraday)
+INTERVAL_MAP: dict[str, dict] = {
+    "1m":  {"method": "intraday_minute_data", "interval": 1},
+    "5m":  {"method": "intraday_minute_data", "interval": 5},
+    "15m": {"method": "intraday_minute_data", "interval": 15},
+    "30m": {"method": "intraday_minute_data", "interval": 30},
+    "1h":  {"method": "intraday_minute_data", "interval": 60},
+    "1D":  {"method": "historical_daily_data", "interval": None},
 }
 
 
 class DhanService:
-    """Thin sync wrapper around dhanhq.dhan_http."""
+    """Sync wrapper around dhanhq 2.2.0."""
 
     def __init__(
         self,
@@ -55,25 +74,26 @@ class DhanService:
     ) -> None:
         self.client_id = client_id or settings.DHAN_CLIENT_ID
         self.access_token = access_token or settings.DHAN_ACCESS_TOKEN
-        self._client = None
+        self._dhan = None
+        self._ctx = None
 
     # ------------------------------------------------------------------ init
     @property
-    def client(self):
-        """Lazily build the dhanhq client. Imports inside method so tests can run
-        without the SDK installed."""
-        if self._client is None:
+    def dhan(self):
+        """Lazily build the dhanhq client."""
+        if self._dhan is None:
             try:
-                from dhanhq import dhan_http  # type: ignore
+                from dhanhq import DhanContext, dhanhq  # type: ignore
             except ImportError as exc:  # pragma: no cover
                 raise RuntimeError(
-                    "dhanhq is not installed. Run: pip install dhanhq"
+                    "dhanhq is not installed. Run: pip install dhanhq==2.2.0"
                 ) from exc
-            self._client = dhan_http.DhanHttp(
-                self.client_id, self.access_token
+            self._ctx = DhanContext(self.client_id, self.access_token)
+            self._dhan = dhanhq(self._ctx)
+            logger.info(
+                "DhanHQ client initialised for client_id={}", self.client_id
             )
-            logger.info("DhanHQ client initialised for client_id={}", self.client_id)
-        return self._client
+        return self._dhan
 
     # ------------------------------------------------------- historical data
     @retry(
@@ -88,6 +108,8 @@ class DhanService:
         interval: str = "1D",
         from_date: datetime | date | None = None,
         to_date: datetime | date | None = None,
+        instrument_type: str | None = None,
+        expiry_code: int = 0,
     ) -> pd.DataFrame:
         """
         Fetch historical OHLCV bars.
@@ -96,40 +118,49 @@ class DhanService:
             timestamp, open, high, low, close, volume
         """
         if segment not in SEGMENT_MAP:
-            raise ValueError(f"Unsupported segment: {segment}")
+            raise ValueError(f"Unsupported segment: {segment!r}. Supported: {list(SEGMENT_MAP)}")
         if interval not in INTERVAL_MAP:
-            raise ValueError(f"Unsupported interval: {interval}")
+            raise ValueError(f"Unsupported interval: {interval!r}. Supported: {list(INTERVAL_MAP)}")
+
+        seg = SEGMENT_MAP[segment]
+        # Allow caller to override instrument_type (e.g. 'OPTIDX' for index options)
+        instr_type = instrument_type or seg["instrument_type"]
+        exchange_segment = seg["exchange_segment"]
 
         end = to_date or date.today()
         start = from_date or (end - timedelta(days=365))
 
-        # dhanhq expects ISO date strings
-        payload = {
-            "securityId": str(security_id),
-            "exchangeSegment": SEGMENT_MAP[segment],
-            "instrument": SEGMENT_MAP[segment],
-            "expiryCode": 0,
-            "fromDate": start.strftime("%Y-%m-%d"),
-            "toDate": end.strftime("%Y-%m-%d"),
-        }
+        # dhanhq expects ISO date strings 'YYYY-MM-DD'
+        from_str = start.strftime("%Y-%m-%d") if hasattr(start, "strftime") else str(start)
+        to_str = end.strftime("%Y-%m-%d") if hasattr(end, "strftime") else str(end)
 
         logger.info(
-            "DhanHQ historical fetch: sec={} seg={} interval={} {}..{}",
-            security_id, segment, interval, start, end,
+            "DhanHQ historical fetch: sec={} seg={} instr={} interval={} {}..{}",
+            security_id, exchange_segment, instr_type, interval, from_str, to_str,
         )
 
-        # The dhanhq method name varies across SDK versions; try both.
-        try:
-            resp = self.client.fetch_historical_daily_ohlc(
-                securityId=payload["securityId"],
-                exchangeSegment=payload["exchangeSegment"],
-                instrument=payload["instrument"],
-                expiryCode=payload["expiryCode"],
-                fromDate=payload["fromDate"],
-                toDate=payload["toDate"],
+        interval_cfg = INTERVAL_MAP[interval]
+        method_name = interval_cfg["method"]
+
+        if method_name == "historical_daily_data":
+            resp = self.dhan.historical_daily_data(
+                security_id=str(security_id),
+                exchange_segment=exchange_segment,
+                instrument_type=instr_type,
+                from_date=from_str,
+                to_date=to_str,
+                expiry_code=expiry_code,
             )
-        except AttributeError:
-            resp = self.client.ohlc_daily(**payload)
+        else:
+            # intraday_minute_data — interval is an int (minutes)
+            resp = self.dhan.intraday_minute_data(
+                security_id=str(security_id),
+                exchange_segment=exchange_segment,
+                instrument_type=instr_type,
+                from_date=from_str,
+                to_date=to_str,
+                interval=interval_cfg["interval"],
+            )
 
         df = self._parse_dhan_response(resp, security_id=security_id, segment=segment)
         if df.empty:
@@ -142,54 +173,100 @@ class DhanService:
         resp: Any, security_id: str, segment: str
     ) -> pd.DataFrame:
         """
-        dhanhq returns either a list-of-dicts or a dict with 'data' key.
-        Normalises into a DataFrame.
+        dhanhq 2.2.0 returns a dict with 'status', 'remarks', 'data'.
+        'data' can be either a list-of-dicts or a JSON string.
+
+        Normalises into a DataFrame with columns:
+            timestamp, open, high, low, close, volume
         """
+        if resp is None:
+            logger.error("DhanHQ returned None response")
+            return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+
+        # Some error responses come back without a 'data' key
+        if isinstance(resp, dict):
+            status = resp.get("status", "")
+            if status == "failure":
+                logger.error(
+                    "DhanHQ failure: remarks={} data={}",
+                    resp.get("remarks"), resp.get("data"),
+                )
+                return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
+
+        # Extract data payload
         if isinstance(resp, dict):
             data = resp.get("data", resp)
         else:
             data = resp
+
+        # data may be a JSON string in some responses
+        if isinstance(data, str):
+            try:
+                import json
+                data = json.loads(data)
+            except json.JSONDecodeError:
+                logger.error("DhanHQ data is non-JSON string: {!r}", data[:200])
+                return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
         if not data:
             return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
 
         # Some responses nest a list under another key
         if isinstance(data, dict):
-            for k in ("historicalDailyOHLC", "ohlcv", "candles", "bars"):
+            for k in ("historicalDailyOHLC", "historical_daily_ohlc", "ohlcv", "candles", "bars", "open_close"):
                 if k in data and isinstance(data[k], list):
                     data = data[k]
                     break
 
         df = pd.DataFrame(data)
-        # Normalise column names
+        # Normalise column names — dhanhq 2.2.0 typically returns:
+        #   {'start_Time': epoch_ms, 'open': '...','high': '...','low': '...','close': '...','volume': '...'}
+        # Or sometimes 'timestamp' instead of 'start_Time'
         col_map = {
+            # Timestamp variants
             "timestamp": "timestamp",
             "date": "timestamp",
             "bhavdate": "timestamp",
-            "open": "open",
-            "OPEN": "open",
-            "high": "high",
-            "HIGH": "high",
-            "low": "low",
-            "LOW": "low",
-            "close": "close",
-            "CLOSE": "close",
-            "volume": "volume",
-            "VOLUME": "volume",
+            "start_Time": "timestamp",
+            "start_time": "timestamp",
+            "time": "timestamp",
+            "ts": "timestamp",
+            # OHLCV — case variants
+            "open": "open",     "OPEN": "open",   "Open": "open",
+            "high": "high",     "HIGH": "high",   "High": "high",
+            "low": "low",       "LOW": "low",     "Low": "low",
+            "close": "close",   "CLOSE": "close", "Close": "close",
+            "volume": "volume", "VOLUME": "volume", "Volume": "volume",
         }
         df = df.rename(columns={c: col_map[c] for c in df.columns if c in col_map})
         for required in ("timestamp", "open", "high", "low", "close"):
             if required not in df.columns:
-                logger.error("DhanHQ response missing column {}: {}", required, df.columns.tolist())
-                return pd.DataFrame()
+                logger.error("DhanHQ response missing column {}. Got: {}", required, df.columns.tolist())
+                return pd.DataFrame(columns=["timestamp", "open", "high", "low", "close", "volume"])
         if "volume" not in df.columns:
             df["volume"] = 0
 
-        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce")
+        # Timestamp: dhanhq often returns epoch milliseconds (int) — convert
+        ts = df["timestamp"]
+        if pd.api.types.is_numeric_dtype(ts):
+            # Heuristic: epoch seconds vs epoch milliseconds
+            sample = ts.iloc[0]
+            if sample > 1e12:  # ms
+                df["timestamp"] = pd.to_datetime(ts, unit="ms", utc=True).dt.tz_convert("Asia/Kolkata").dt.tz_localize(None)
+            else:  # seconds
+                df["timestamp"] = pd.to_datetime(ts, unit="s", utc=True).dt.tz_convert("Asia/Kolkata").dt.tz_localize(None)
+        else:
+            df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", dayfirst=True)
+
         df = df.dropna(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
         for c in ("open", "high", "low", "close"):
+            # Coerce to numeric, handling string values like "1234.50"
             df[c] = pd.to_numeric(df[c], errors="coerce")
         df["volume"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0).astype(int)
+
+        # Drop rows with NaN OHLC (sometimes dhanhq returns a header row)
+        df = df.dropna(subset=["open", "high", "low", "close"]).reset_index(drop=True)
+
         return df[["timestamp", "open", "high", "low", "close", "volume"]]
 
     # ------------------------------------------------- persist to DB
@@ -206,12 +283,19 @@ class DhanService:
             return 0
         rows = []
         for _, r in df.iterrows():
+            ts_val = r["timestamp"]
+            if hasattr(ts_val, "to_pydatetime"):
+                ts = ts_val.to_pydatetime()
+            elif isinstance(ts_val, pd.Timestamp):
+                ts = ts_val.to_pydatetime()
+            else:
+                ts = pd.Timestamp(ts_val).to_pydatetime()
             rows.append({
                 "segment": segment,
                 "security_id": str(security_id),
                 "symbol": symbol,
                 "timeframe": interval,
-                "timestamp": r["timestamp"].to_pydatetime() if hasattr(r["timestamp"], "to_pydatetime") else r["timestamp"],
+                "timestamp": ts,
                 "open": float(r["open"]),
                 "high": float(r["high"]),
                 "low": float(r["low"]),
@@ -222,7 +306,7 @@ class DhanService:
         db = SessionLocal()
         try:
             stmt = pg_insert(OhlcvBar).values(rows)
-            # Conflict on (security_id, timeframe, timestamp) -> update OHLCV
+            # Conflict on (security_id, timeframe, timestamp) → update OHLCV
             upd = stmt.on_conflict_do_update(
                 constraint="uq_ohlcv_sec_tf_ts",
                 set_={
@@ -248,6 +332,7 @@ class DhanService:
         segment: str,
         interval: str = "1D",
         days: int = 365,
+        instrument_type: str | None = None,
     ) -> int:
         """Fetch + persist. Returns number of bars saved."""
         end = date.today()
@@ -258,6 +343,7 @@ class DhanService:
             interval=interval,
             from_date=start,
             to_date=end,
+            instrument_type=instrument_type,
         )
         return self.persist_bars(df, security_id, symbol, segment, interval)
 

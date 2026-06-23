@@ -22,6 +22,9 @@ class SyncRequest(BaseModel):
     segment: str   # NSE_EQ | NSE_FNO | MCX
     interval: str = "1D"
     days: int = 365
+    # Override instrument_type when segment is NSE_FNO or MCX
+    # (defaults: NSE_EQ→EQUITY, NSE_FNO→INDEX, MCX→FUTCOM)
+    instrument_type: str | None = None
 
 
 @router.post("/sync")
@@ -29,8 +32,7 @@ def sync_data(
     payload: SyncRequest,
     _=Depends(get_current_user),
 ):
-    """Synchronously fetch & persist 1-year of OHLCV. Returns bar count.
-    For long lists of symbols, dispatch via Celery instead (Step 5)."""
+    """Synchronously fetch & persist 1-year of OHLCV. Returns bar count."""
     try:
         svc = DhanService()
         n = svc.sync_historical(
@@ -39,6 +41,7 @@ def sync_data(
             segment=payload.segment,
             interval=payload.interval,
             days=payload.days,
+            instrument_type=payload.instrument_type,
         )
         return {
             "security_id": payload.security_id,

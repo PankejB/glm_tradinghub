@@ -67,6 +67,7 @@ def task_run_backtest(self, backtest_result_id: int):
                 segment=br.segment,
                 interval="1D",
                 days=365,
+                # Backtest task doesn't know instrument_type — let DhanService default it
             )
             df = DhanService.load_bars(
                 security_id=br.security_id, timeframe="1D",
