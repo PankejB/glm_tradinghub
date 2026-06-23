@@ -10,7 +10,7 @@ export default function Login() {
   const { login, register, loading, error } = useAuth();
   const navigate = useNavigate();
   const [mode, setMode] = useState('login');
-  const [email, setEmail] = useState('admin@trading.local');
+  const [email, setEmail] = useState('admin@trading.dev');
   const [password, setPassword] = useState('admin123');
   const [fullName, setFullName] = useState('');
 
@@ -106,7 +106,7 @@ export default function Login() {
         </form>
 
         <p className="text-xs text-ink-200 mt-4 text-center">
-          Default admin: <code className="font-mono">admin@trading.local / admin123</code>
+          Default admin: <code className="font-mono">admin@trading.dev / admin123</code>
         </p>
       </div>
     </div>

@@ -85,7 +85,7 @@ cp .env.example .env.local        # VITE_API_BASE_URL=http://localhost:8000
 npm run dev
 ```
 
-Open http://localhost:5173 — login with `admin@trading.local / admin123`.
+Open http://localhost:5173 — login with `admin@trading.dev / admin123`.
 
 ---
 

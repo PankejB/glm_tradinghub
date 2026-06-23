@@ -11,13 +11,15 @@ from app.core.config import settings
 
 # pool_pre_ping: detects dropped connections
 # pool_recycle: recycle connections every 30min (Postgres default idle timeout is ~1h)
+# NOTE: echo=True spams every SQL statement to stdout (twice, due to loguru
+# intercept). Set APP_ENV=verbose to re-enable.
 engine = create_engine(
     settings.DB_URL,
     pool_pre_ping=True,
     pool_recycle=1800,
     pool_size=10,
     max_overflow=20,
-    echo=(settings.APP_ENV == "development"),
+    echo=False,
     future=True,
 )
 

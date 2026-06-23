@@ -286,7 +286,7 @@ ${BOLD}Frontend (separate terminal):${NC}
   cd ~/glm_tradinghub/frontend
   npm run dev
   → http://localhost:5173
-  → Login: admin@trading.local / admin123
+  → Login: admin@trading.dev / admin123
 
 ${BOLD}Before trading:${NC}
   Edit backend/.env and fill in your real DhanHQ credentials:

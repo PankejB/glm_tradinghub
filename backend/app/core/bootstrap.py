@@ -112,7 +112,7 @@ def seed_admin_user(db: Session) -> User | None:
     if db.query(User).count() > 0:
         return None
     admin = User(
-        email="admin@trading.local",
+        email="admin@trading.dev",
         full_name="Default Admin",
         hashed_password=hash_password("admin123"),
         starting_capital=settings.DEFAULT_CAPITAL,
@@ -124,7 +124,7 @@ def seed_admin_user(db: Session) -> User | None:
     db.add(admin)
     db.commit()
     db.refresh(admin)
-    logger.warning("Created default admin user: admin@trading.local / admin123  (CHANGE PASSWORD!)")
+    logger.warning("Created default admin user: admin@trading.dev / admin123  (CHANGE PASSWORD!)")
     return admin
 
 
