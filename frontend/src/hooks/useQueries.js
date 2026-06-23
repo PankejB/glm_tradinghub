@@ -39,6 +39,8 @@ export function useBacktestResults(limit = 20) {
   return useQuery({
     queryKey: ['backtest-results', limit],
     queryFn: () => backtestApi.results(limit),
+    // Auto-refresh every 5s so completed backtests appear without manual reload
+    refetchInterval: 5_000,
   });
 }
 
