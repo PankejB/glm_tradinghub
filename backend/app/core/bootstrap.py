@@ -23,6 +23,9 @@ STOCK_CT_PARAMS = {
     "profit_target": 300,        # ₹300 fixed profit target
     "time_exit_bars": 8,         # time-based exit after 8 bars
     "risk_per_trade_pct": 1.0,   # 1% fixed-risk sizing
+    # Live trading defaults
+    "default_symbol": "RELIANCE",
+    "default_security_id": "2885",
 }
 
 MCX_TF_PARAMS = {
@@ -34,6 +37,11 @@ MCX_TF_PARAMS = {
     "stop_loss_stddev_mult": 3,  # 3x StdDev catastrophic stop
     "trailing_stop_atr_mult": 2.0,
     "risk_per_trade_pct": 1.0,
+    # Live trading defaults — current front-month GOLD futures contract
+    # Verify at https://images.dhan.co/api-data/api-scrip-master.csv before going live.
+    # (DhanHQ security_ids for futures change with each new contract listing.)
+    "default_symbol": "GOLD",
+    "default_security_id": "466583",  # GOLD-05Aug2026-FUT (front month, MCX)
 }
 
 INDEX_BS_PARAMS = {
@@ -48,6 +56,9 @@ INDEX_BS_PARAMS = {
     "profit_target_pct": 0.50,   # 50% TP on option premium
     "time_exit_bars": 5,         # exit after 5 bars if neither hit
     "risk_per_trade_pct": 1.0,
+    # Live trading defaults — NIFTY 50 index
+    "default_symbol": "NIFTY 50",
+    "default_security_id": "13",
 }
 
 
