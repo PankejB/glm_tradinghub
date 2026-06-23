@@ -25,7 +25,9 @@ passlib[bcrypt]==1.7.4
 bcrypt==4.1.2
 
 # --- Broker SDK ------------------------------------------------------------
-dhanhq==2.0.6
+# NOTE: 2.0.6 doesn't exist on PyPI (they jumped from 2.0.2 → 2.2.0).
+# 2.2.0 is the latest stable; uses the same v2 API our DhanService wraps.
+dhanhq==2.2.0
 
 # --- Async / task queue ----------------------------------------------------
 celery==5.3.6
