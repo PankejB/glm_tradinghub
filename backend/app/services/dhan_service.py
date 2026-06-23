@@ -278,9 +278,20 @@ class DhanService:
         segment: str,
         interval: str = "1D",
     ) -> int:
-        """Upsert OHLCV rows into the OhlcvBar table. Returns count inserted."""
+        """Upsert OHLCV rows into the OhlcvBar table. Returns count inserted.
+
+        Handles two edge cases that previously broke syncs:
+        1. Duplicate timestamps within the batch — dhanhq sometimes returns
+           the same bar twice (especially around expiries for FNO/MCX).
+           Postgres rejects ON CONFLICT DO UPDATE if the same row would be
+           affected twice. Fix: deduplicate by (security_id, timeframe, timestamp).
+        2. Constraint name drift — use index_elements=[...] instead of
+           constraint="uq_..." so we don't depend on the exact name.
+        """
         if df.empty:
             return 0
+
+        # --- Build row list -------------------------------------------------
         rows = []
         for _, r in df.iterrows():
             ts_val = r["timestamp"]
@@ -303,12 +314,26 @@ class DhanService:
                 "volume": int(r["volume"]),
             })
 
+        # --- Deduplicate by (security_id, timeframe, timestamp) -------------
+        # Keep the LAST occurrence (in case dhanhq sends a corrected value)
+        seen: dict[tuple, dict] = {}
+        for row in rows:
+            key = (row["security_id"], row["timeframe"], row["timestamp"])
+            seen[key] = row
+        unique_rows = list(seen.values())
+        if len(unique_rows) < len(rows):
+            logger.warning(
+                "Deduplicated {} → {} rows for {} ({} dupes removed)",
+                len(rows), len(unique_rows), symbol, len(rows) - len(unique_rows),
+            )
+
+        # --- Bulk upsert ----------------------------------------------------
         db = SessionLocal()
         try:
-            stmt = pg_insert(OhlcvBar).values(rows)
-            # Conflict on (security_id, timeframe, timestamp) → update OHLCV
+            stmt = pg_insert(OhlcvBar).values(unique_rows)
+            # Use index_elements (more robust than constraint="name")
             upd = stmt.on_conflict_do_update(
-                constraint="uq_ohlcv_sec_tf_ts",
+                index_elements=["security_id", "timeframe", "timestamp"],
                 set_={
                     "open": stmt.excluded.open,
                     "high": stmt.excluded.high,
@@ -319,8 +344,18 @@ class DhanService:
             )
             db.execute(upd)
             db.commit()
-            logger.info("Persisted {} bars for {} ({})", len(rows), symbol, interval)
-            return len(rows)
+            logger.info(
+                "Persisted {} bars for {} ({})",
+                len(unique_rows), symbol, interval,
+            )
+            return len(unique_rows)
+        except Exception as exc:
+            db.rollback()
+            logger.error(
+                "persist_bars failed for {} ({} rows): {}",
+                symbol, len(unique_rows), exc,
+            )
+            raise
         finally:
             db.close()
 
