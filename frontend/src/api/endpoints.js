@@ -24,10 +24,12 @@ export const strategiesApi = {
 export const backtestApi = {
   start: (payload) =>
     client.post('/api/backtest/start', payload).then((r) => r.data),
+  startPortfolio: (payload) =>
+    client.post('/api/backtest/start_portfolio', payload).then((r) => r.data),
   status: (taskId) =>
     client.get(`/api/backtest/status/${taskId}`).then((r) => r.data),
-  results: (limit = 20) =>
-    client.get(`/api/backtest/results?limit=${limit}`).then((r) => r.data),
+  results: (limit = 20, portfolioOnly = false) =>
+    client.get(`/api/backtest/results?limit=${limit}&portfolio_only=${portfolioOnly}`).then((r) => r.data),
 };
 
 // ---- Trading -------------------------------------------------------------

@@ -58,6 +58,18 @@ class BacktestResult(Base):
     # Parameters used
     parameters: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
+    # ----- Portfolio backtest fields -----
+    # True for a parent portfolio backtest; False for single-instrument or child rows.
+    is_portfolio: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # For child rows: points to the parent portfolio BacktestResult.id
+    parent_portfolio_id: Mapped[int | None] = mapped_column(
+        ForeignKey("backtest_results.id", ondelete="CASCADE"),
+        nullable=True, index=True,
+    )
+    # Per-instrument breakdown for portfolio backtests (JSON list of dicts):
+    #   [{security_id, symbol, segment, trades, net_profit, gtp_ratio, max_dd_pct, win_rate, ...}, ...]
+    portfolio_breakdown: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
     # Task linkage
     celery_task_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     status: Mapped[str] = mapped_column(
@@ -70,9 +82,18 @@ class BacktestResult(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     strategy = relationship("Strategy", lazy="selectin")
+    # Child results of a portfolio backtest
+    child_results = relationship(
+        "BacktestResult",
+        backref="parent_portfolio",
+        remote_side="BacktestResult.id",
+        primaryjoin="BacktestResult.id==BacktestResult.parent_portfolio_id",
+        lazy="selectin",
+    )
 
     __table_args__ = (
         Index("ix_backtest_results_strategy_status", "strategy_id", "status"),
+        Index("ix_backtest_results_portfolio", "is_portfolio", "parent_portfolio_id"),
     )
 
     def __repr__(self) -> str:

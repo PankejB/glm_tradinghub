@@ -14,6 +14,7 @@ celery_app = Celery(
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
         "app.tasks.backtest_tasks",
+        "app.tasks.portfolio_backtest_tasks",
         "app.tasks.live_trading_tasks",
     ],
 )

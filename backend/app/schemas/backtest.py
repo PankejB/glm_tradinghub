@@ -17,6 +17,39 @@ class BacktestStartRequest(BaseModel):
     parameters: dict = {}      # optional overrides
 
 
+class PortfolioInstrument(BaseModel):
+    """One instrument in a portfolio backtest."""
+    security_id: str
+    symbol: str
+    segment: str = "NSE_EQ"
+    instrument_type: str | None = None   # for NSE_FNO/MCX overrides
+
+
+class PortfolioBacktestStartRequest(BaseModel):
+    """Run a strategy across N instruments simultaneously."""
+    strategy_id: int
+    instruments: list[PortfolioInstrument]
+    start_date: datetime
+    end_date: datetime
+    initial_capital: float = 1_000_000.0
+    parameters: dict = {}      # optional overrides applied to ALL instruments
+
+
+class PortfolioBreakdownItem(BaseModel):
+    """Per-instrument summary inside a portfolio backtest."""
+    security_id: str
+    symbol: str
+    segment: str
+    trades: int
+    net_profit: float
+    net_profit_pct: float
+    win_rate: float
+    max_drawdown_pct: float
+    gtp_ratio: float
+    is_tradeable: bool
+    error: str | None = None
+
+
 class BacktestStatusOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -38,3 +71,6 @@ class BacktestStatusOut(BaseModel):
     trades_json: list | None = None
     equity_curve_json: list | None = None
     completed_at: datetime | None = None
+    # Portfolio-specific
+    is_portfolio: bool = False
+    portfolio_breakdown: list | None = None

@@ -24,6 +24,14 @@ export function useStartBacktest() {
   });
 }
 
+export function useStartPortfolioBacktest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: backtestApi.startPortfolio,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['backtest-results'] }),
+  });
+}
+
 export function useBacktestStatus(taskId, options = {}) {
   return useQuery({
     queryKey: ['backtest-status', taskId],
