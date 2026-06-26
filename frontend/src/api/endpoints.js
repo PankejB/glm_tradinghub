@@ -20,6 +20,11 @@ export const strategiesApi = {
   get: (id) => client.get(`/api/strategies/${id}`).then((r) => r.data),
 };
 
+// ---- Tuning --------------------------------------------------------------
+export const tuningApi = {
+  schema: (strategyId) => client.get(`/api/tuning/${strategyId}`).then((r) => r.data),
+};
+
 // ---- Backtest ------------------------------------------------------------
 export const backtestApi = {
   start: (payload) =>

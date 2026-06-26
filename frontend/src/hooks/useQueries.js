@@ -4,7 +4,7 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  strategiesApi, backtestApi, tradingApi, portfolioApi, dataApi,
+  strategiesApi, backtestApi, tradingApi, portfolioApi, dataApi, tuningApi,
 } from '../api/endpoints';
 
 // ---- Strategies ----------------------------------------------------------
@@ -12,6 +12,15 @@ export function useStrategies() {
   return useQuery({
     queryKey: ['strategies'],
     queryFn: strategiesApi.list,
+  });
+}
+
+// ---- Tuning ---------------------------------------------------------------
+export function useTuningSchema(strategyId) {
+  return useQuery({
+    queryKey: ['tuning-schema', strategyId],
+    queryFn: () => tuningApi.schema(strategyId),
+    enabled: !!strategyId,
   });
 }
 

@@ -4,7 +4,7 @@
  */
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, FlaskConical, Radio, LogOut } from 'lucide-react';
+import { LayoutDashboard, FlaskConical, Radio, LogOut, Sliders } from 'lucide-react';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -47,6 +47,7 @@ export default function Layout() {
           <nav className="flex gap-2">
             {navItem('/', 'Dashboard', LayoutDashboard)}
             {navItem('/backtest', 'Backtest', FlaskConical)}
+            {navItem('/tuning', 'Tuning', Sliders)}
             {navItem('/live', 'Live Trading', Radio)}
           </nav>
         </div>
