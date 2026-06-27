@@ -44,6 +44,7 @@ from app.services.dhan_service import DhanService
 from app.services.order_executor import (
     OrderExecutor, OrderExecutionError, LiveTradingDisabledError,
 )
+from app.services.alert_service import get_alert_service
 from app.strategies import build_strategy
 
 
@@ -143,6 +144,15 @@ def _circuit_breaker_tripped(strategy_id: int) -> bool:
             "(limit ₹{}) — stopping loop",
             strategy_id, abs(daily_loss), settings.MAX_DAILY_LOSS_INR,
         )
+        # Send Telegram alert
+        try:
+            get_alert_service().send_circuit_breaker_alert(
+                strategy_id=strategy_id,
+                daily_loss=daily_loss,
+                max_loss=settings.MAX_DAILY_LOSS_INR,
+            )
+        except Exception:  # noqa: BLE001
+            pass  # alerts must never break the trading loop
         return True
     return False
 
@@ -205,12 +215,19 @@ def task_start_live_trading(self, strategy_id: int, user_id: int, paper_mode: bo
         strategy = build_strategy(strat.strategy_type, parameters=strat.parameters)
         dhan = DhanService()
         executor = OrderExecutor(dhan_service=dhan) if not paper_mode else None
+        alert_service = get_alert_service()
         tick_interval = settings.LIVE_LOOP_INTERVAL_SEC
 
         logger.info(
             "LIVE loop ready: strat={} symbol={} sec={} segment={} tick={}s paper={}",
             strat.slug, symbol, security_id, segment, tick_interval, paper_mode,
         )
+
+        # Send startup alert
+        try:
+            alert_service.send_startup_alert(strat.slug, symbol, paper_mode)
+        except Exception:  # noqa: BLE001
+            pass
 
         while True:
             # 1) Stop signal?
@@ -322,6 +339,20 @@ def task_start_live_trading(self, strategy_id: int, user_id: int, paper_mode: bo
                             symbol, open_trade.side, exit_price, round(pnl, 2),
                             broker_exit_order_id or "paper",
                         )
+                        # Send Telegram exit alert
+                        try:
+                            alert_service.send_exit_alert(
+                                symbol=symbol, side=open_trade.side,
+                                quantity=open_trade.quantity,
+                                entry_price=open_trade.entry_price,
+                                exit_price=exit_price, pnl=pnl,
+                                exit_reason=exit_sig.meta.get("exit_reason", "signal"),
+                                strategy_slug=strat.slug,
+                                paper_mode=paper_mode,
+                                broker_order_id=broker_exit_order_id,
+                            )
+                        except Exception:  # noqa: BLE001
+                            pass
                 else:
                     # 8) Look for entry
                     entry_sig = strategy.check_entry(last_row, prev_row)
@@ -392,6 +423,20 @@ def task_start_live_trading(self, strategy_id: int, user_id: int, paper_mode: bo
                                     entry_sig.side, symbol, qty, actual_entry_price,
                                     entry_sig.stop_loss, broker_entry_order_id,
                                 )
+                                # Send Telegram entry alert
+                                try:
+                                    alert_service.send_entry_alert(
+                                        symbol=symbol, side=entry_sig.side,
+                                        quantity=qty, entry_price=actual_entry_price,
+                                        stop_loss=entry_sig.stop_loss,
+                                        take_profit=entry_sig.take_profit,
+                                        strategy_slug=strat.slug,
+                                        paper_mode=paper_mode,
+                                        broker_order_id=broker_entry_order_id,
+                                        bar_score=entry_sig.bar_score,
+                                    )
+                                except Exception:  # noqa: BLE001
+                                    pass
 
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Live tick error: {}", exc)
@@ -401,6 +446,11 @@ def task_start_live_trading(self, strategy_id: int, user_id: int, paper_mode: bo
         # ---- Loop exited — clean up --------------------------------------
         _redis.delete(ACTIVE_KEY.format(strategy_id=strategy_id))
         logger.info("LIVE trading loop stopped for strategy {}", strategy_id)
+        # Send stop alert
+        try:
+            alert_service.send_stop_alert(strat.slug, equity, square_off=False)
+        except Exception:  # noqa: BLE001
+            pass
         return {
             "status": "stopped",
             "strategy_id": strategy_id,

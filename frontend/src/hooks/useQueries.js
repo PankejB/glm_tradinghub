@@ -5,6 +5,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   strategiesApi, backtestApi, tradingApi, portfolioApi, dataApi, tuningApi,
+  sweepApi, journalApi, alertsApi,
 } from '../api/endpoints';
 
 // ---- Strategies ----------------------------------------------------------
@@ -106,4 +107,85 @@ export function usePortfolio() {
 // ---- Data sync -----------------------------------------------------------
 export function useSyncData() {
   return useMutation({ mutationFn: dataApi.sync });
+}
+
+// ---- Parameter Sweep ------------------------------------------------------
+export function useStartSweep() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: sweepApi.start,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sweep-results'] }),
+  });
+}
+
+export function useSweepStatus(taskId, options = {}) {
+  return useQuery({
+    queryKey: ['sweep-status', taskId],
+    queryFn: () => sweepApi.status(taskId),
+    enabled: !!taskId,
+    refetchInterval: (data) =>
+      data && (data.status === 'pending' || data.status === 'running') ? 3000 : false,
+    ...options,
+  });
+}
+
+export function useSweepResults(limit = 20) {
+  return useQuery({
+    queryKey: ['sweep-results', limit],
+    queryFn: () => sweepApi.results(limit),
+    refetchInterval: 10_000,
+  });
+}
+
+// ---- Trade Journal / Analytics -------------------------------------------
+export function useJournalTrades(params = {}) {
+  return useQuery({
+    queryKey: ['journal-trades', params],
+    queryFn: () => journalApi.trades(params),
+  });
+}
+
+export function useJournalAnalytics(mode = 'live', days = 90) {
+  return useQuery({
+    queryKey: ['journal-analytics', mode, days],
+    queryFn: () => journalApi.analytics({ mode, days }),
+  });
+}
+
+export function useJournalEquityCurve(days = 30) {
+  return useQuery({
+    queryKey: ['journal-equity-curve', days],
+    queryFn: () => journalApi.equityCurve(days),
+  });
+}
+
+export function useMonthlyReturns(year = null, mode = 'live') {
+  return useQuery({
+    queryKey: ['monthly-returns', year, mode],
+    queryFn: () => journalApi.monthlyReturns(year, mode),
+  });
+}
+
+export function useStreaks(mode = 'live') {
+  return useQuery({
+    queryKey: ['streaks', mode],
+    queryFn: () => journalApi.streaks(mode),
+  });
+}
+
+// ---- Alerts (Telegram) ----------------------------------------------------
+export function useAlertsStatus() {
+  return useQuery({
+    queryKey: ['alerts-status'],
+    queryFn: alertsApi.status,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useSendTestAlert() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: alertsApi.test,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['alerts-status'] }),
+  });
 }

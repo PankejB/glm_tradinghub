@@ -8,6 +8,8 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Backtest from './pages/Backtest';
 import StrategyTuning from './pages/StrategyTuning';
+import ParameterSweep from './pages/ParameterSweep';
+import TradeJournal from './pages/TradeJournal';
 import LiveTrading from './pages/LiveTrading';
 
 function ProtectedRoute({ children }) {
@@ -30,6 +32,8 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/backtest" element={<Backtest />} />
         <Route path="/tuning" element={<StrategyTuning />} />
+        <Route path="/sweep" element={<ParameterSweep />} />
+        <Route path="/journal" element={<TradeJournal />} />
         <Route path="/live" element={<LiveTrading />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

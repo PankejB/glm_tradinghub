@@ -5,9 +5,9 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   useStrategies, useStartTrading, useStopTrading,
-  useActiveTrading, useTradingStatus,
+  useActiveTrading, useTradingStatus, useAlertsStatus, useSendTestAlert,
 } from '../hooks/useQueries';
-import { Radio, Play, Square, Activity, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Radio, Play, Square, Activity, AlertTriangle, ShieldCheck, Send } from 'lucide-react';
 
 export default function LiveTrading() {
   const { data: strategies } = useStrategies();
@@ -15,6 +15,8 @@ export default function LiveTrading() {
   const stopTrading = useStopTrading();
   const { data: active } = useActiveTrading();
   const { data: tradingStatus } = useTradingStatus();
+  const { data: alertsStatus } = useAlertsStatus();
+  const sendTestAlert = useSendTestAlert();
 
   const [paperMode, setPaperMode] = useState(true);
   const [logs, setLogs] = useState([]);
@@ -151,7 +153,7 @@ export default function LiveTrading() {
           ) : (
             <ShieldCheck size={20} className="mt-0.5 flex-shrink-0" />
           )}
-          <div className="text-sm">
+          <div className="text-sm flex-1">
             <div className="font-semibold">
               {tradingStatus.live_trading_enabled
                 ? '⚠️ LIVE TRADING ENABLED — REAL ORDERS WILL BE PLACED'
@@ -165,6 +167,43 @@ export default function LiveTrading() {
               MCX product: {tradingStatus.product_types?.MCX}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Telegram alerts status */}
+      {alertsStatus && (
+        <div className={`rounded-xl border p-4 flex items-start gap-3 ${
+          alertsStatus.enabled
+            ? 'bg-bull-50 border-bull-200 text-bull-700'
+            : 'bg-ink-50 border-ink-200 text-ink-700'
+        }`}>
+          <Send size={18} className="mt-0.5 flex-shrink-0" />
+          <div className="text-sm flex-1">
+            <div className="font-semibold">
+              {alertsStatus.enabled
+                ? '📱 Telegram Alerts Enabled'
+                : '📱 Telegram Alerts Disabled'}
+            </div>
+            <div className="text-xs mt-1 opacity-80">
+              {alertsStatus.enabled ? (
+                <>
+                  Chat ID: <code className="font-mono">{alertsStatus.chat_id}</code> ·
+                  Alerts: {alertsStatus.alert_settings?.on_entry && ' Entry'}{alertsStatus.alert_settings?.on_exit && ' Exit'}{alertsStatus.alert_settings?.on_error && ' Error'}{alertsStatus.alert_settings?.on_circuit_breaker && ' CircuitBreaker'}
+                </>
+              ) : (
+                <>Set TELEGRAM_ENABLED=true + TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID in backend/.env to receive trade alerts on Telegram.</>
+              )}
+            </div>
+          </div>
+          {alertsStatus.enabled && (
+            <button
+              onClick={() => sendTestAlert.mutate()}
+              disabled={sendTestAlert.isPending}
+              className="text-xs bg-bull-600 hover:bg-bull-700 text-white px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1"
+            >
+              <Send size={12} /> {sendTestAlert.isPending ? 'Sending…' : 'Send Test'}
+            </button>
+          )}
         </div>
       )}
 

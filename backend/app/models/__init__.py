@@ -9,6 +9,7 @@ from app.models.trade_log import TradeLog
 from app.models.backtest_result import BacktestResult
 from app.models.equity_curve import EquityCurve
 from app.models.ohlcv_bar import OhlcvBar
+from app.models.sweep_result import SweepResult
 
 __all__ = [
     "User",
@@ -17,4 +18,5 @@ __all__ = [
     "BacktestResult",
     "EquityCurve",
     "OhlcvBar",
+    "SweepResult",
 ]

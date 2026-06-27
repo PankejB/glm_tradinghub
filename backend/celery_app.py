@@ -15,6 +15,7 @@ celery_app = Celery(
     include=[
         "app.tasks.backtest_tasks",
         "app.tasks.portfolio_backtest_tasks",
+        "app.tasks.sweep_tasks",
         "app.tasks.live_trading_tasks",
     ],
 )

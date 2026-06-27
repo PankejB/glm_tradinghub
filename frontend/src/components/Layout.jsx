@@ -4,7 +4,7 @@
  */
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { LayoutDashboard, FlaskConical, Radio, LogOut, Sliders } from 'lucide-react';
+import { LayoutDashboard, FlaskConical, Radio, LogOut, Sliders, Grid3x3, BookOpen } from 'lucide-react';
 
 export default function Layout() {
   const { user, logout } = useAuth();
@@ -48,7 +48,9 @@ export default function Layout() {
             {navItem('/', 'Dashboard', LayoutDashboard)}
             {navItem('/backtest', 'Backtest', FlaskConical)}
             {navItem('/tuning', 'Tuning', Sliders)}
-            {navItem('/live', 'Live Trading', Radio)}
+            {navItem('/sweep', 'Sweep', Grid3x3)}
+            {navItem('/journal', 'Journal', BookOpen)}
+            {navItem('/live', 'Live', Radio)}
           </nav>
         </div>
         <div className="flex items-center gap-3">

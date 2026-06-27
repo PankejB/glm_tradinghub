@@ -8,11 +8,13 @@ Run worker with:
 """
 from app.tasks.backtest_tasks import task_run_backtest
 from app.tasks.portfolio_backtest_tasks import task_run_portfolio_backtest
+from app.tasks.sweep_tasks import task_run_parameter_sweep
 from app.tasks.live_trading_tasks import task_start_live_trading, task_stop_trading
 
 __all__ = [
     "task_run_backtest",
     "task_run_portfolio_backtest",
+    "task_run_parameter_sweep",
     "task_start_live_trading",
     "task_stop_trading",
 ]

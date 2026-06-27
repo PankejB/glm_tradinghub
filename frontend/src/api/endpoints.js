@@ -37,6 +37,36 @@ export const backtestApi = {
     client.get(`/api/backtest/results?limit=${limit}&portfolio_only=${portfolioOnly}`).then((r) => r.data),
 };
 
+// ---- Parameter Sweep -----------------------------------------------------
+export const sweepApi = {
+  start: (payload) =>
+    client.post('/api/sweep/start', payload).then((r) => r.data),
+  status: (taskId) =>
+    client.get(`/api/sweep/status/${taskId}`).then((r) => r.data),
+  results: (limit = 20) =>
+    client.get(`/api/sweep/results?limit=${limit}`).then((r) => r.data),
+};
+
+// ---- Trade Journal / Analytics ------------------------------------------
+export const journalApi = {
+  trades: (params = {}) =>
+    client.get('/api/journal/trades', { params }).then((r) => r.data),
+  analytics: (params = {}) =>
+    client.get('/api/journal/analytics', { params }).then((r) => r.data),
+  equityCurve: (days = 30) =>
+    client.get(`/api/journal/equity-curve?days=${days}`).then((r) => r.data),
+  monthlyReturns: (year = null, mode = 'live') =>
+    client.get(`/api/journal/monthly-returns?year=${year || ''}&mode=${mode}`).then((r) => r.data),
+  streaks: (mode = 'live') =>
+    client.get(`/api/journal/streaks?mode=${mode}`).then((r) => r.data),
+};
+
+// ---- Alerts (Telegram) ---------------------------------------------------
+export const alertsApi = {
+  status: () => client.get('/api/alerts/status').then((r) => r.data),
+  test: () => client.post('/api/alerts/test').then((r) => r.data),
+};
+
 // ---- Trading -------------------------------------------------------------
 export const tradingApi = {
   start: (payload) =>

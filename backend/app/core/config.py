@@ -58,6 +58,18 @@ class Settings(BaseSettings):
     ORDER_RETRY_ATTEMPTS: int = 3
     ORDER_RETRY_DELAY_SEC: float = 2.0
 
+    # --- Telegram alerts (optional) ---
+    # Create a bot via @BotFather on Telegram, then create a channel/group
+    # and add the bot to it. Get the chat ID by inviting @userinfobot.
+    TELEGRAM_BOT_TOKEN: str = ""          # e.g. "123456789:ABCdef..."
+    TELEGRAM_CHAT_ID: str = ""            # e.g. "-1001234567890" (channel) or "123456789" (DM)
+    TELEGRAM_ENABLED: bool = False        # master switch for alerts
+    # Which events trigger alerts
+    TELEGRAM_ALERT_ON_ENTRY: bool = True
+    TELEGRAM_ALERT_ON_EXIT: bool = True
+    TELEGRAM_ALERT_ON_ERROR: bool = True
+    TELEGRAM_ALERT_ON_CIRCUIT_BREAKER: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
