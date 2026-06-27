@@ -1,6 +1,7 @@
 """
 app.api.trading
 ---------------
+GET  /api/trading/status        — is live trading enabled? (kill switch state)
 POST /api/trading/start
 POST /api/trading/stop
 GET  /api/trading/active
@@ -8,6 +9,7 @@ GET  /api/trading/active
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.db.session import get_db
 from app.core.deps import get_current_user
 from app.models.strategy import Strategy
@@ -15,6 +17,27 @@ from app.models.user import User
 from app.schemas.trading import TradingStartRequest, TradingStopRequest
 
 router = APIRouter(prefix="/trading", tags=["trading"])
+
+
+@router.get("/status")
+def trading_status(_=Depends(get_current_user)):
+    """Returns whether live trading (real orders) is enabled.
+    Frontend uses this to show warnings + disable the live-mode toggle."""
+    return {
+        "live_trading_enabled": settings.LIVE_TRADING_ENABLED,
+        "order_type_default": settings.ORDER_TYPE_DEFAULT,
+        "max_daily_loss_inr": settings.MAX_DAILY_LOSS_INR,
+        "product_types": {
+            "NSE_EQ":  settings.ORDER_PRODUCT_TYPE_EQ,
+            "NSE_FNO": settings.ORDER_PRODUCT_TYPE_FNO,
+            "MCX":     settings.ORDER_PRODUCT_TYPE_MCX,
+        },
+        "warning": (
+            "⚠️ LIVE TRADING IS ENABLED. Real orders will be placed."
+            if settings.LIVE_TRADING_ENABLED
+            else "Live trading is DISABLED (paper mode only). Set LIVE_TRADING_ENABLED=true in .env to enable."
+        ),
+    }
 
 
 @router.post("/start")
@@ -26,7 +49,24 @@ def start_trading(
     strat = db.get(Strategy, payload.strategy_id)
     if not strat:
         raise HTTPException(status_code=404, detail="Strategy not found")
-    if not strat.is_tradeable:
+
+    # SAFETY: if live trading is disabled, force paper_mode=True
+    effective_paper_mode = payload.paper_mode or not settings.LIVE_TRADING_ENABLED
+    if not payload.paper_mode and not settings.LIVE_TRADING_ENABLED:
+        # Frontend asked for live, but kill switch is off → return warning
+        return {
+            "task_id": None,
+            "strategy_id": payload.strategy_id,
+            "paper_mode": True,
+            "status": "forced_paper",
+            "message": (
+                "Live trading is DISABLED (LIVE_TRADING_ENABLED=false). "
+                "Started in PAPER mode instead. To enable live trading, "
+                "set LIVE_TRADING_ENABLED=true in backend/.env and restart."
+            ),
+        }
+
+    if not strat.is_tradeable and not effective_paper_mode:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -41,15 +81,19 @@ def start_trading(
     async_result = task_start_live_trading.delay(
         strategy_id=payload.strategy_id,
         user_id=user_id,
-        paper_mode=payload.paper_mode,
+        paper_mode=effective_paper_mode,
     )
     return {
         "task_id": async_result.id,
         "strategy_id": payload.strategy_id,
         "strategy_slug": strat.slug,
-        "paper_mode": payload.paper_mode,
+        "paper_mode": effective_paper_mode,
         "status": "dispatched",
-        "message": "Live trading loop started",
+        "message": (
+            "⚠️ LIVE trading loop started (real orders will be placed)"
+            if not effective_paper_mode
+            else "Paper trading loop started (no real orders)"
+        ),
     }
 
 

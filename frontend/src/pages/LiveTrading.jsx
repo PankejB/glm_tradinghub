@@ -1,16 +1,20 @@
 /**
  * src/pages/LiveTrading.jsx
- * Toggle switches for strategies + live log console.
+ * Toggle switches for strategies + live log console + live-mode safety warnings.
  */
 import { useEffect, useRef, useState } from 'react';
-import { useStrategies, useStartTrading, useStopTrading, useActiveTrading } from '../hooks/useQueries';
-import { Radio, Play, Square, Activity } from 'lucide-react';
+import {
+  useStrategies, useStartTrading, useStopTrading,
+  useActiveTrading, useTradingStatus,
+} from '../hooks/useQueries';
+import { Radio, Play, Square, Activity, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function LiveTrading() {
   const { data: strategies } = useStrategies();
   const startTrading = useStartTrading();
   const stopTrading = useStopTrading();
   const { data: active } = useActiveTrading();
+  const { data: tradingStatus } = useTradingStatus();
 
   const [paperMode, setPaperMode] = useState(true);
   const [logs, setLogs] = useState([]);
@@ -21,11 +25,17 @@ export default function LiveTrading() {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
+  // If live trading is disabled in backend, force paper mode ON in the UI
+  useEffect(() => {
+    if (tradingStatus && !tradingStatus.live_trading_enabled) {
+      setPaperMode(true);
+    }
+  }, [tradingStatus]);
+
   // Convert active tasks to a Set of strategy_ids for quick lookup
   const activeStratIds = new Set(
     (active?.active_live_tasks || []).map((t) => {
       try {
-        // args is a JSON string like '[1, 2, true]'
         const args = JSON.parse(t.args || '[]');
         return args[0];
       } catch { return null; }
@@ -38,10 +48,15 @@ export default function LiveTrading() {
         strategy_id: stratId,
         paper_mode: paperMode,
       });
+      // Backend may force paper mode if LIVE_TRADING_ENABLED=false
+      const actualPaperMode = res.paper_mode ?? paperMode;
+      const forcedToPaper = res.status === 'forced_paper';
       setLogs((l) => [...l, {
         t: new Date().toISOString(),
-        level: 'INFO',
-        msg: `STARTED strategy #${stratId} (task=${res.task_id}, paper=${paperMode})`,
+        level: forcedToPaper ? 'WARN' : (actualPaperMode ? 'INFO' : 'ERROR'),
+        msg: forcedToPaper
+          ? `⚠️ LIVE TRADING DISABLED — started strategy #${stratId} in PAPER mode instead. Set LIVE_TRADING_ENABLED=true in backend/.env to enable real orders.`
+          : `${actualPaperMode ? 'PAPER' : '⚠️ LIVE'} trading started for strategy #${stratId} (task=${res.task_id})${!actualPaperMode ? ' — REAL ORDERS WILL BE PLACED' : ''}`,
       }]);
     } catch (e) {
       setLogs((l) => [...l, {
@@ -101,10 +116,19 @@ export default function LiveTrading() {
               type="checkbox"
               checked={paperMode}
               onChange={(e) => setPaperMode(e.target.checked)}
+              disabled={!tradingStatus?.live_trading_enabled}
               className="w-4 h-4 accent-bull-600"
             />
             Paper Mode
-            <span className="text-xs text-ink-200">(recommended for testing)</span>
+            {tradingStatus?.live_trading_enabled ? (
+              <span className="text-xs text-bear-600 font-semibold">
+                ⚠️ Live trading is ENABLED — unchecking will place REAL orders
+              </span>
+            ) : (
+              <span className="text-xs text-ink-200">
+                (live trading disabled in .env — locked to paper)
+              </span>
+            )}
           </label>
           <button
             onClick={handleStopAll}
@@ -114,6 +138,35 @@ export default function LiveTrading() {
           </button>
         </div>
       </div>
+
+      {/* Safety status banner */}
+      {tradingStatus && (
+        <div className={`rounded-xl border p-4 flex items-start gap-3 ${
+          tradingStatus.live_trading_enabled
+            ? 'bg-bear-50 border-bear-200 text-bear-700'
+            : 'bg-bull-50 border-bull-200 text-bull-700'
+        }`}>
+          {tradingStatus.live_trading_enabled ? (
+            <AlertTriangle size={20} className="mt-0.5 flex-shrink-0" />
+          ) : (
+            <ShieldCheck size={20} className="mt-0.5 flex-shrink-0" />
+          )}
+          <div className="text-sm">
+            <div className="font-semibold">
+              {tradingStatus.live_trading_enabled
+                ? '⚠️ LIVE TRADING ENABLED — REAL ORDERS WILL BE PLACED'
+                : '🛡️ PAPER MODE ONLY — no real orders will be placed'}
+            </div>
+            <div className="text-xs mt-1 opacity-80">
+              {tradingStatus.warning} · Max daily loss: ₹{Number(tradingStatus.max_daily_loss_inr || 0).toLocaleString('en-IN')} ·
+              Order type: {tradingStatus.order_type_default} ·
+              NSE_EQ product: {tradingStatus.product_types?.NSE_EQ} ·
+              NSE_FNO product: {tradingStatus.product_types?.NSE_FNO} ·
+              MCX product: {tradingStatus.product_types?.MCX}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {strategies?.map((s) => {

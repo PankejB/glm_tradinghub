@@ -39,6 +39,25 @@ class Settings(BaseSettings):
     MARKET_OPEN_IST: str = "09:15"
     MARKET_CLOSE_IST: str = "15:30"
 
+    # --- Live trading safety rails ---
+    # MASTER KILL SWITCH. Must be True for ANY real order to be placed.
+    # If False, the system forces paper_mode regardless of API request.
+    LIVE_TRADING_ENABLED: bool = False
+    # Per-segment DhanHQ product types:
+    #   NSE_EQ  → CNC (delivery) or INTRADAY (MIS)
+    #   NSE_FNO → INTRADAY (MIS) for options/futures
+    #   MCX     → INTRADAY (MIS) for commodities
+    ORDER_PRODUCT_TYPE_EQ: str = "CNC"        # CNC = delivery, INTRADAY = MIS
+    ORDER_PRODUCT_TYPE_FNO: str = "INTRADAY"
+    ORDER_PRODUCT_TYPE_MCX: str = "INTRADAY"
+    # Default order type for entries (MARKET = immediate fill, LIMIT = price-controlled)
+    ORDER_TYPE_DEFAULT: str = "MARKET"
+    # Circuit breaker: stop the live loop if daily loss exceeds this ₹ amount
+    MAX_DAILY_LOSS_INR: float = 50_000.0
+    # Retry config for transient broker failures
+    ORDER_RETRY_ATTEMPTS: int = 3
+    ORDER_RETRY_DELAY_SEC: float = 2.0
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

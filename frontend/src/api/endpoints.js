@@ -44,6 +44,7 @@ export const tradingApi = {
   stop: (payload) =>
     client.post('/api/trading/stop', payload).then((r) => r.data),
   active: () => client.get('/api/trading/active').then((r) => r.data),
+  status: () => client.get('/api/trading/status').then((r) => r.data),
 };
 
 // ---- Portfolio -----------------------------------------------------------

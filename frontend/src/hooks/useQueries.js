@@ -86,6 +86,14 @@ export function useActiveTrading() {
   });
 }
 
+export function useTradingStatus() {
+  return useQuery({
+    queryKey: ['trading-status'],
+    queryFn: tradingApi.status,
+    refetchInterval: 30_000,  // refresh every 30s in case .env is changed
+  });
+}
+
 // ---- Portfolio -----------------------------------------------------------
 export function usePortfolio() {
   return useQuery({
