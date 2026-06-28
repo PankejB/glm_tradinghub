@@ -61,7 +61,58 @@ uvicorn app.main:app --reload --port 8000
 
 Open http://localhost:8000/docs — you should see all endpoints.
 
-### 2.4 Celery worker (separate terminal)
+---
+
+## 🚀 ONE-CLICK START (recommended after initial setup)
+
+After running `scripts/setup.sh` once, you can start/stop/status all 3 services
+with single commands — no more juggling 3 terminals.
+
+### Start everything (one terminal)
+
+```bash
+./scripts/start.sh
+```
+
+This launches all 3 services in ONE terminal with color-coded prefixed logs:
+
+```
+[API]     INFO:     Uvicorn running on http://0.0.0.0:8000
+[WORKER]  [celery@hostname ready]
+[WEB]     VITE v5.x.x  ready in xxx ms  →  http://localhost:5173/
+```
+
+**Ctrl+C** in that terminal gracefully stops ALL services. Logs are also
+persisted to `logs/{api,worker,web}.log`.
+
+### Stop everything
+
+```bash
+./scripts/stop.sh              # graceful
+./scripts/stop.sh --force      # kill -9 if anything is stuck
+./scripts/stop.sh --docker     # also stop postgres/redis/flower
+```
+
+### Check what's running
+
+```bash
+./scripts/status.sh
+```
+
+Shows health of Docker containers, all 3 services, HTTP endpoints, and
+current config (live trading enabled? telegram enabled? max daily loss?).
+
+### Restart (after .env change or git pull)
+
+```bash
+./scripts/restart.sh
+```
+
+---
+
+### 2.4 Celery worker (separate terminal) — ONLY if not using start.sh
+
+If you prefer the old-school 3-terminal approach instead of `start.sh`:
 
 ```bash
 cd backend
@@ -76,7 +127,7 @@ Optional — Flower dashboard for monitoring Celery:
 celery -A celery_app flower --port=5555
 ```
 
-### 2.5 Frontend
+### 2.5 Frontend — ONLY if not using start.sh
 
 ```bash
 cd frontend
